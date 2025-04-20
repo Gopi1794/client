@@ -1,0 +1,70 @@
+{
+    "userSettings": "Configuraciones de Usuario",
+    "configuration": "Configuración",
+    "values": "Valores",
+    "username": "Nombre De Usuario",
+    "email": "Correo Electrónico",
+    "notifications": "Notificación",
+    "darkMode": "Modo Oscuro",
+    "language": "Lenguaje",
+      "spanish": "\uD83C\uDDEA\uD83C\uDDF8 Español",
+  "english": "\uD83C\uDDEC\uD83C\uDDE7 Ingles",
+
+  "sales": {
+    "summary": "Resumen de Ventas",
+    "value": "Valor",
+    "millions": "Millones",
+    "days": "{{count}} días",
+    "highestDate": "Fecha de mayor venta",
+    "fetchError": "Error al obtener los datos"
+  },
+  "time": {
+    "daily": "Día",
+    "weekly": "Semana",
+    "monthly": "Mes"
+  },
+  "stats": {
+    "title": "Estadísticas",
+    "dateRange": "Rango de fechas",
+    "change": "Cambio",
+    "increase": "Aumento",
+    "decrease": "Disminución",
+    "sales": "Ventas",
+    "revenue": "Ingresos",
+    "expenses": "Gastos",
+    "profit": "Ganancias"
+  },
+    
+   
+
+    "sidebar": {
+      "dashboard": "Panel",
+      "inventory": "Inventario",
+      "products": "Productos",
+      "users": "Usuarios",
+      "settings": "Configuración",
+      "expenses": "Gastos"
+    },
+    "header": {
+      "title": "Encabezado"
+    },
+
+    "popularProducts": {
+      "title": "Productos Populares",
+      "sold": "Mil Vendidos"
+    },
+    "cardResumen": {
+      "title": "Resumen de Compras",
+      "bought": "Comprado"
+    },
+    "expensesSummary": {
+    "title": "Resumen de Gastos",
+    "category": "Gastos",
+    "average": "Promedio",
+    "increase": "Aumento"
+  }
+    
+
+  
+  }
+  

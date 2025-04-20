@@ -1,0 +1,74 @@
+{
+    "userSettings": "User Settings",
+    "configuration": "Configuration",
+    "values": "Values",
+    "username": "Username",
+    "email": "Email",
+    "notifications": "Notifications",
+    "darkMode": "Dark Mode",
+    "language": "Language",
+      "spanish": "\uD83C\uDDEA\uD83C\uDDF8 Spanish",
+  "english": "\uD83C\uDDEC\uD83C\uDDE7 English",
+
+    "sales": {
+      "summary": "Sales Summary",
+      "value": "Value",
+      "millions": "Millions",
+      "days": "{{count}} days",
+      "highestDate": "Highest Sale Date",
+      "fetchError": "Failed to fetch data"
+    },
+    "time": {
+      "daily": "Day",
+      "weekly": "Week",
+      "monthly": "Month"
+    },
+    
+      "stats": {
+        "title": "Statistics",
+        "dateRange": "Date Range",
+        "change": "Change",
+        "increase": "Increase",
+        "decrease": "Decrease",
+        "sales": "Sales",
+        "revenue": "Revenue",
+        "expenses": "Expenses",
+        "profit": "Profit"
+      },
+    
+    
+  
+  
+    
+    
+      "sidebar": {
+        "dashboard": "Dashboard",
+        "inventory": "Inventory",
+        "products": "Products",
+        "users": "Users",
+        "settings": "Settings",
+        "expenses": "Expenses"
+      },
+      "header": {
+        "title": "Header"
+      },
+      "popularProducts": {
+        "title": "Popular Products",
+        "sold": "Thousand Sold"
+      },
+      "cardResumen": {
+    "title": "Purchases Summary",
+    "bought": "Bought"
+  },
+  "expensesSummary": {
+    "title": "Expense Summary",
+    "category": "Expenses",
+    "average": "Average",
+    "increase": "Increase"
+  }
+    
+    
+    
+    
+  }
+  
