@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useReactToPrint } from "react-to-print";
 import { QRCodeSVG } from "qrcode.react";
 
@@ -16,13 +16,37 @@ type QRModalProps = {
 
 const QRModal = ({ isOpen, producto, onClose }: QRModalProps) => {
   const qrRef = useRef<HTMLDivElement>(null);
+  const [productoCongelado, setProductoCongelado] = useState<
+    typeof producto | null
+  >(null);
+
+  useEffect(() => {
+    if (isOpen && producto) {
+      setProductoCongelado({ ...producto });
+    }
+  }, [isOpen, producto]);
+
+  // Función para generar la URL del QR
+  const generateQRCodeUrl = () => {
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(
+      JSON.stringify(productoCongelado)
+    )}&size=128x128`;
+    return qrCodeUrl;
+  };
+
+  // Llamar a la función onQRGenerated con la URL generada
+  useEffect(() => {
+    if (productoCongelado) {
+      const qrUrl = generateQRCodeUrl();
+    }
+  }, [productoCongelado]);
 
   const handlePrint = useReactToPrint({
     content: () => qrRef.current,
-    documentTitle: `Etiqueta - ${producto.nombre}`,
+    documentTitle: `Etiqueta - ${productoCongelado?.nombre || "Etiqueta"}`,
     pageStyle: `
       @page {
-        size: 60mm 40mm; /* Ajustalo al tamaño real de tu etiqueta */
+        size: 60mm 40mm;
         margin: 0;
       }
       body {
@@ -48,9 +72,7 @@ const QRModal = ({ isOpen, producto, onClose }: QRModalProps) => {
     `,
   });
 
-  const qrValue = useMemo(() => JSON.stringify(producto), [producto]);
-
-  if (!isOpen || !producto) return null;
+  if (!isOpen || !productoCongelado) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
@@ -64,17 +86,17 @@ const QRModal = ({ isOpen, producto, onClose }: QRModalProps) => {
         >
           <QRCodeSVG
             className="mb-2"
-            value={qrValue}
+            value={JSON.stringify(productoCongelado)}
             size={128}
             bgColor="#ffffff"
             fgColor="#000000"
             level="H"
           />
           <p>
-            <strong>{producto.nombre}</strong>
+            <strong>{productoCongelado.nombre}</strong>
           </p>
-          <p>Precio: ${producto.precio}</p>
-          <p>ID: {producto.productoId}</p>
+          <p>Precio: ${productoCongelado.precio}</p>
+          <p>ID: {productoCongelado.productoId}</p>
         </div>
         <div className="mt-4 text-center">
           <p className="text-gray-600">Escanea el código QR para más info</p>

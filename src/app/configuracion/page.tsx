@@ -63,25 +63,27 @@ const Configuracion = () => {
   return (
     <div className="w-full">
       <Header name={t("userSettings")} />
-      <div className="overflow-x-auto mt-5 shadow-md">
-        <table className="min-w-full bg-white rounded-lg">
-          <thead className="bg-gray-800 text-white">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mt-4 overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-100">
             <tr>
-              <th className="text-left py-3 px-4 uppercase font-semibold text-sm">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                 {t("configuration")}
               </th>
-              <th className="text-left py-3 px-4 uppercase font-semibold text-sm">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                 {t("values")}
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="bg-white divide-y divide-gray-200">
             {configuracionesDeUsuario.map((setting, index) => (
-              <tr className="hover:bg-blue-50" key={setting.key}>
-                <td className="py-2 px-4">{setting.label}</td>
-                <td className="py-2 px-4">
+              <tr key={setting.key} className="hover:bg-gray-50">
+                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                  {setting.label}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                   {setting.type === "toggle" ? (
-                    <label className="inline-flex relative item-center cursor-pointer">
+                    <label className="inline-flex items-center cursor-pointer">
                       <input
                         type="checkbox"
                         className="sr-only peer"
@@ -98,27 +100,21 @@ const Configuracion = () => {
                           }
                         }}
                       />
-                      <div
-                        className="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-blue-400 peer-focus:ring-4 
-                        transition peer-checked:after:translate-x-full peer-checked:after:border-white 
-                        after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white 
-                        after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all
-                        peer-checked:bg-blue-600"
-                      ></div>
+                      <div className="relative w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                     </label>
                   ) : setting.key === "language" ? (
-                    <div className="flex items-center">
+                    <div className="flex items-center space-x-2">
                       <img
                         src={flagSrc}
                         alt="Flag"
-                        width="24"
-                        height="18"
-                        className="mr-2"
+                        width="20"
+                        height="15"
+                        className="rounded-sm"
                       />
                       <select
                         value={i18n.language}
                         onChange={(e) => i18n.changeLanguage(e.target.value)}
-                        className="px-4 py-2 border rounded-lg text-gray-500 focus:outline-none focus:border-blue-500"
+                        className="border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm text-sm border py-1 px-2"
                       >
                         <option value="es">Español</option>
                         <option value="en">English</option>
@@ -127,7 +123,7 @@ const Configuracion = () => {
                   ) : (
                     <input
                       type="text"
-                      className="px-4 py-2 border rounded-lg text-gray-500 focus:outline-none focus:border-blue-500"
+                      className="border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm text-sm border py-1 px-2"
                       value={setting.value as string}
                       onChange={(e) => {
                         const settingCopy = [...configuracionesDeUsuario];

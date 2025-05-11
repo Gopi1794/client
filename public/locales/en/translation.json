@@ -47,7 +47,8 @@
         "products": "Products",
         "users": "Users",
         "settings": "Settings",
-        "expenses": "Expenses"
+        "expenses": "Expenses",
+        "warehouse": "Warehouse"
       },
       "header": {
         "title": "Header"

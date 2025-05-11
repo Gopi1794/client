@@ -6,9 +6,9 @@ import {
   Clipboard,
   Layout,
   LucideIcon,
-  Menu,
   SlidersHorizontal,
   User,
+  Box,
 } from "lucide-react";
 import React from "react";
 import { useAppDispatch, useAppSelector } from "@/app/redux";
@@ -127,6 +127,12 @@ const Sidebar = () => {
           href="/gastos"
           icon={CircleDollarSign}
           labelKey="sidebar.expenses"
+          isCollapsed={isSidebarCollapsed}
+        />
+        <SidebarLink
+          href="/deposito"
+          icon={Box}
+          labelKey="sidebar.warehouse"
           isCollapsed={isSidebarCollapsed}
         />
       </div>

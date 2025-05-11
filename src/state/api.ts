@@ -7,7 +7,10 @@ export interface Productos {
     nombre: string;           // Nombre del producto
     precio: number;           // Precio del producto
     categoria: number;        // Categoría del producto
-    cantidadExistente: number; // Cantidad de productos disponibles en stock
+    cantidadExistente: number;
+    descripcion:string,
+    proveedor: string,
+    qr_url: string;          // URL al código QR generado para el producto
 }
 
 // Interfaz para crear un nuevo producto
@@ -15,8 +18,21 @@ export interface NuevoProducto {
     nombre: string;           // Nombre del producto
     precio: number;           // Precio del producto
     categoria: number;        // Categoría del producto
-    cantidadExistente: number; // Cantidad de productos a crear
+    cantidadExistente: number;
+    qr_url: string;
+    ubicacion: string; // ej: "Estantería A3", "Depósito", "Pasillo 2"
+ // URL al código QR generado para el producto
 }
+
+export interface Rack {
+    x: number; // Coordenada X del rack
+    y: number; // Coordenada Y del rack
+    locked: boolean; // Indica si el rack está bloqueado o no
+    qrData: string; // Datos del código QR
+    productos: Productos[]; // Lista de productos asociados al rack
+     // ej: "Estantería A3", "Depósito", "Pasillo 2"
+  }
+  
 
 // Interfaz para el resumen de ventas
 export interface ResumenDeVentas {
@@ -51,7 +67,7 @@ export interface GastosPorCategoria {
 
 export interface GastosPorCategoriaResumen {
     gastosPorCategoriaResumenId: string;
-    ctaegoria: string;
+    categoria: string;
     total: string;
     fecha: string;
 }
@@ -76,7 +92,7 @@ export interface Usuarios {
 export const api = createApi({
     baseQuery: fetchBaseQuery({ baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL }), // Base URL de la API
     reducerPath: "api", // Ruta del reducer en el store de Redux
-    tagTypes: ["dashboardMetrics", "Productos", "Usuarios" , "Gastos"], // Etiquetas para invalidar cachés
+    tagTypes: ["dashboardMetrics", "Productos", "Usuarios" , "Gastos" , "Racks"], // Etiquetas para invalidar cachés
     endpoints: (build) => ({  // Definimos los endpoints disponibles en esta API
         // Endpoint para obtener las métricas del dashboard
         getDashboardMetrics: build.query<DashboardMetrics, void>({
@@ -91,6 +107,10 @@ export const api = createApi({
             }),
             providesTags: ["Productos"],  // Etiqueta que se asocia a este endpoint
         }),
+        getRacks: build.query<Rack[], void>({
+            query: () => "/racks", // Ruta a tu endpoint de racks
+            providesTags: ["Racks"], // Agregá esta etiqueta también en tagTypes si querés manejar caché
+          }),          
         // Endpoint para crear un nuevo producto
         createProducto: build.mutation<Productos, NuevoProducto>({
             query: (nuevoProducto) => ({
@@ -100,6 +120,8 @@ export const api = createApi({
             }),
             invalidatesTags: ["Productos"], // Invalidamos la caché de productos después de crear uno
         }),
+        
+        
         // Endpoint para obtener los usuarios
         getUsuarios: build.query<Usuarios[], void>({
             query: () => "/usuarios",  // URL para obtener los usuarios
@@ -111,23 +133,33 @@ export const api = createApi({
         }),
         loginUsuario: build.mutation({
             query: ({ nombre_usuario, contrasena }) => ({
-              url: '/authRoutes',
+              url: '/authRoutes/login', // URL para el login
               method: 'POST',
               body: { nombre_usuario, contrasena },
             }),
           }),
           
-      
+          // Agrega este endpoint dentro de `endpoints` en tu configuración de la API
+createRack: build.mutation<Rack, Partial<Rack>>({
+    query: (nuevoRack) => ({
+      url: "/racks", // Ruta a tu endpoint de creación de racks
+      method: "POST", // Método HTTP POST
+      body: nuevoRack, // El cuerpo de la solicitud es el nuevo rack
+    }),
+    invalidatesTags: ["Racks"], // Invalidamos la caché de racks después de crear uno
+  }),
     }),
 });
 
 // Exponemos los hooks generados por Redux Toolkit Query para su uso en componentes
+// HOOK
 export const {
     useGetDashboardMetricsQuery,
     useGetProductosQuery,
     useCreateProductoMutation,
     useGetUsuariosQuery,
     useGetGastosPorCategoriaQuery,
-    useLoginUsuarioMutation, // <<--- NUEVO HOOK
+    useLoginUsuarioMutation,
+    useGetRacksQuery,
+    useCreateRackMutation, // Hook para crear racks
   } = api;
-  

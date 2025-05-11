@@ -43,7 +43,9 @@
       "products": "Productos",
       "users": "Usuarios",
       "settings": "Configuración",
-      "expenses": "Gastos"
+      "expenses": "Gastos",
+      "deposito": "Deposito"
+
     },
     "header": {
       "title": "Encabezado"
