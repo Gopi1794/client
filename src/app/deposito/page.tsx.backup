@@ -6,7 +6,6 @@ import {
   useCreateRackMutation,
   useGetRacksQuery,
   useDeleteRackMutation,
-  useUpdateRackMutation,
 } from "@/state/api";
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import interact from "interactjs";
@@ -15,12 +14,13 @@ import {
   Lock,
   Trash,
   Eye,
+  X,
   QrCode,
   Building2,
   Package,
-  PanelTopClose,
-  FolderClosedIcon,
-  ShieldCloseIcon,
+  ZoomIn,
+  ZoomOut,
+  Crosshair,
 } from "lucide-react";
 import {
   Button,
@@ -40,7 +40,6 @@ import {
   DialogActions,
   ButtonGroup,
   Divider,
-  IconButton,
 } from "@mui/material";
 import { useReactToPrint } from "react-to-print";
 import { QRCodeSVG } from "qrcode.react";
@@ -48,12 +47,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import Rating from "../(components)/Rating";
 import { SelectChangeEvent } from "@mui/material/Select";
 import { PrismaTypes } from "@/types/prisma";
-import {
-  Rack as ApiRack,
-  Floor as ApiFloor,
-  ProductoUbicacion,
-} from "@/state/api";
-import RackDrawerContent from "../(components)/RackDrawerContent";
+import { Rack as ApiRack, Floor as ApiFloor, ProductoUbicacion } from "@/state/api";
 
 // Interfaces para los tipos de datos usados en el componente
 interface RackData extends ApiRack {
@@ -112,21 +106,13 @@ interface RackInConstruction {
 function Deposito() {
   // -------------------- ESTADOS PRINCIPALES --------------------
   // Estados para racks, pisos, zoom/pan, modo construcción, etc.
-  const [searchTerm, setSearchTerm] = useState("");
-  const [searchResults, setSearchResults] = useState<
-    {
-      producto: ProductoData;
-      rackId: number;
-      floorName: string;
-      floorLevel: number;
-    }[]
-  >([]);
   const [racks, setRacks] = useState<RackData[]>([]);
   const [doors, setDoors] = useState<
     { x: number; y: number; visible: boolean }[]
   >([]);
   const [nextId, setNextId] = useState(1);
   const [nextId2, setNextId2] = useState(1);
+  const [drawerOpen, setDrawerOpen] = useState<{ [key: number]: boolean }>({});
   const [selectedFloorId, setSelectedFloorId] = useState<number | null>(null);
   const [hoveredRackId, setHoveredRackId] = useState<number | null>(null);
   const [currentRackId, setCurrentRackId] = useState<number | null>(null);
@@ -188,7 +174,6 @@ function Deposito() {
   // Mutaciones para crear y eliminar racks
   const [createRack] = useCreateRackMutation();
   const [deleteRackMutation] = useDeleteRackMutation();
-  const [updateRack] = useUpdateRackMutation();
 
   // -------------------- IMPRESIÓN DE QR --------------------
   const handlePrint = useReactToPrint({
@@ -249,132 +234,210 @@ function Deposito() {
 
   // Toggle lock/unlock de un rack
   const toggleLock = useCallback((rackId: number) => {
-    setRacks((prev) =>
-      prev.map((rack) =>
-        rack.id === rackId ? { ...rack, locked: !rack.locked } : rack
-      )
-    );
+    setRacks(prev => prev.map(rack => 
+      rack.id === rackId ? { ...rack, locked: !rack.locked } : rack
+    ));
   }, []);
 
   // Eliminar un rack
-  const deleteRack = useCallback(
-    async (rackId: number) => {
-      try {
-        await deleteRackMutation(rackId).unwrap();
-        setRacks((prev) => prev.filter((rack) => rack.id !== rackId));
-        setDeletedRackIds((prev) => [...prev, rackId]);
-      } catch (error) {
-        console.error("Error al eliminar el rack:", error);
-      }
-    },
-    [deleteRackMutation]
-  );
+  const deleteRack = useCallback(async (rackId: number) => {
+    try {
+      await deleteRackMutation(rackId).unwrap();
+      setRacks(prev => prev.filter(rack => rack.id !== rackId));
+      setDeletedRackIds(prev => [...prev, rackId]);
+    } catch (error) {
+      console.error('Error al eliminar el rack:', error);
+    }
+  }, [deleteRackMutation]);
 
   // Toggle drawer de un rack
+  const toggleDrawerRack = useCallback((rackId: number, open: boolean) => {
+    setCurrentRackId(rackId);
+    setDrawerOpen(prev => ({ ...prev, [rackId]: open }));
+  }, []);
 
   // Renderizar contenido del drawer
   const renderDrawerContent = useCallback(() => {
     if (!currentRackId) return null;
+    
+    const rack = racks.find(r => r.id === currentRackId);
+    if (!rack) {
+      console.error('Rack no encontrado:', currentRackId);
+      return null;
+    }
 
-    const rack = racks.find((r) => r.id === currentRackId);
-    if (!rack) return null;
+    console.log('Rack seleccionado:', rack); // Debug log
 
-    // Estado local para el piso seleccionado
-    const [selectedFloor, setSelectedFloor] = useState(
-      rack.floors && rack.floors.length > 0 ? rack.floors[0].id : null
-    );
-
-    // Encuentra el piso seleccionado
-    const floor = rack.floors?.find((f) => f.id === selectedFloor);
+    // Si el rack no tiene floors y no estamos ya recargando, intentamos recargar los datos
+    if (!rack.floors || rack.floors.length === 0) {
+      if (!isRefetching && refetchAttempts < MAX_REFETCH_ATTEMPTS) {
+        console.log(`Recargando datos... Intento ${refetchAttempts + 1} de ${MAX_REFETCH_ATTEMPTS}`);
+        setIsRefetching(true);
+        setRefetchAttempts(prev => prev + 1);
+        
+        refetch()
+          .then(() => {
+            console.log('Datos recargados exitosamente');
+          })
+          .catch((error) => {
+            console.error('Error al recargar datos:', error);
+          })
+          .finally(() => {
+            setIsRefetching(false);
+          });
+      } else if (refetchAttempts >= MAX_REFETCH_ATTEMPTS) {
+        console.log('Se alcanzó el máximo de intentos de recarga');
+      }
+    }
 
     return (
       <Box sx={{ p: 2 }}>
         <Typography variant="h6" gutterBottom>
-          Rack #{rack.id}
+          Detalles del Rack {rack.id}
         </Typography>
-
-        {/* Selector de piso */}
-        {rack.floors && rack.floors.length > 0 && (
-          <FormControl fullWidth sx={{ mb: 2 }}>
-            <InputLabel>Piso</InputLabel>
-            <Select
-              value={selectedFloor}
-              label="Piso"
-              onChange={(e) => setSelectedFloor(Number(e.target.value))}
-            >
-              {rack.floors.map((f) => (
-                <MenuItem key={f.id} value={f.id}>
-                  {f.name} (Nivel {f.level})
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        )}
-
-        {/* Productos del piso seleccionado */}
-        {floor ? (
-          <>
-            <Typography variant="subtitle1" gutterBottom>
-              Productos en {floor.name}:
+        
+        {/* Estado de carga */}
+        {(isRacksLoading || isRefetching) && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+            <Typography>
+              {isRefetching ? 'Recargando datos del rack...' : 'Cargando datos del rack...'}
             </Typography>
-            {floor.ubicaciones && floor.ubicaciones.length > 0 ? (
-              <Box sx={{ pl: 2 }}>
-                {floor.ubicaciones.map((ubicacion) => (
-                  <Box key={ubicacion.id}>
-                    <Typography variant="body2">
-                      {ubicacion.producto.nombre}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Cantidad: {ubicacion.cantidad}
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-            ) : (
-              <Typography variant="body2" color="text.secondary" sx={{ pl: 2 }}>
-                No hay productos en este piso
-              </Typography>
-            )}
-          </>
-        ) : (
-          <Typography variant="body2" color="text.secondary">
-            Selecciona un piso para ver sus productos.
-          </Typography>
+          </Box>
         )}
+
+        {/* Error al cargar */}
+        {isRacksError && (
+          <Box sx={{ p: 2, bgcolor: 'error.light', borderRadius: 1 }}>
+            <Typography color="error">
+              Error al cargar los datos del rack
+            </Typography>
+            <Button 
+              size="small" 
+              onClick={() => {
+                setRefetchAttempts(0);
+                setIsRefetching(false);
+                refetch();
+              }}
+              sx={{ mt: 1 }}
+            >
+              Reintentar
+            </Button>
+          </Box>
+        )}
+        
+        {/* Lista de pisos con sus productos */}
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="subtitle1" gutterBottom>
+            Pisos y Productos:
+          </Typography>
+          {rack.floors && rack.floors.length > 0 ? (
+            rack.floors.map(floor => (
+              <Box 
+                key={floor.id} 
+                sx={{ 
+                  mb: 2, 
+                  p: 2, 
+                  bgcolor: 'background.paper', 
+                  borderRadius: 1,
+                  border: '1px solid',
+                  borderColor: 'divider'
+                }}
+              >
+                <Typography variant="subtitle2" color="primary" gutterBottom>
+                  {floor.name} (Nivel {floor.level})
+                </Typography>
+                
+                {/* Lista de productos en este piso */}
+                {floor.ubicaciones && floor.ubicaciones.length > 0 ? (
+                  <Box sx={{ pl: 2 }}>
+                    {floor.ubicaciones.map(ubicacion => (
+                      <Box 
+                        key={ubicacion.id} 
+                        sx={{ 
+                          mb: 1, 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: 1,
+                          p: 1,
+                          bgcolor: 'background.default',
+                          borderRadius: 1
+                        }}
+                      >
+                        <Package size={16} />
+                        <Box>
+                          <Typography variant="body2">
+                            {ubicacion.producto.nombre}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Cantidad: {ubicacion.cantidad}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+                ) : (
+                  <Typography variant="body2" color="text.secondary" sx={{ pl: 2 }}>
+                    No hay productos en este piso
+                  </Typography>
+                )}
+              </Box>
+            ))
+          ) : (
+            <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                {refetchAttempts >= MAX_REFETCH_ATTEMPTS 
+                  ? 'No se pudieron cargar los pisos después de varios intentos. Por favor, intente nuevamente más tarde.'
+                  : 'No hay pisos configurados para este rack'}
+              </Typography>
+              {refetchAttempts >= MAX_REFETCH_ATTEMPTS && (
+                <Button 
+                  size="small" 
+                  onClick={() => {
+                    setRefetchAttempts(0);
+                    setIsRefetching(false);
+                    refetch();
+                  }}
+                  sx={{ mt: 1 }}
+                >
+                  Reintentar
+                </Button>
+              )}
+            </Box>
+          )}
+        </Box>
+
+        <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+          <Button
+            variant="contained"
+            startIcon={<QrCode />}
+            onClick={() => {
+              setCurrentRackId(rack.id);
+              handlePrint();
+            }}
+          >
+            Imprimir QR
+          </Button>
+        </Box>
       </Box>
     );
-  }, [currentRackId, racks]);
+  }, [currentRackId, racks, handlePrint, isRacksLoading, isRacksError, refetch, isRefetching, refetchAttempts]);
 
   // Guardar cambios de construcción
   const saveConstructionChanges = useCallback(async () => {
     try {
-      // Envía cada rack modificado al backend
-      for (const mod of modifiedRacks) {
-        await updateRack({
-          id: mod.id,
-          x: mod.x,
-          y: mod.y,
-          width: mod.width,
-          height: mod.height,
-        });
-      }
-
-      // Elimina los racks marcados para borrar
-      for (const id of deletedRackIds) {
-        await deleteRackMutation(id);
-      }
-
-      // Refresca los datos
+      // Aquí implementarías la lógica para guardar los cambios
+      // Por ejemplo, actualizar los racks modificados y eliminar los eliminados
+      console.log('Guardando cambios:', { modifiedRacks, deletedRackIds });
+      
+      // Refrescar los datos
       await refetch();
-
-      // Limpia el modo construcción
-      setModifiedRacks([]);
-      setDeletedRackIds([]);
-      setIsConstructionMode(false);
+      
+      // Salir del modo construcción
+      exitConstructionMode();
     } catch (error) {
-      console.error("Error guardando cambios:", error);
+      console.error('Error al guardar los cambios:', error);
     }
-  }, [modifiedRacks, deletedRackIds, updateRack, deleteRackMutation, refetch]);
+  }, [modifiedRacks, deletedRackIds, refetch, exitConstructionMode]);
 
   // Registrar cambios en racks (drag/resize)
   const registerRackModification = useCallback(
@@ -419,54 +482,42 @@ function Deposito() {
   // Aplica drag y resize a un rack si está en modo construcción y no está bloqueado
   const applyInteractToElement = useCallback(
     (interactable: Interact.Interactable, rackId: number) => {
-      console.log("🔧 applyInteractToElement llamado para rack:", rackId); // Debug log
-
+      console.log('🔧 applyInteractToElement llamado para rack:', rackId); // Debug log
+      
       const rack = racks.find((r) => r.id === rackId);
       if (!rack) {
-        console.log("❌ Rack no encontrado en el estado:", rackId); // Debug log
+        console.log('❌ Rack no encontrado en el estado:', rackId); // Debug log
         return;
       }
 
-      console.log("🔧 Rack encontrado:", rack); // Debug log
-      console.log("🔧 Modo construcción:", isConstructionMode); // Debug log
-      console.log("🔧 Rack bloqueado:", rack.locked); // Debug log
+      console.log('🔧 Rack encontrado:', rack); // Debug log
+      console.log('🔧 Modo construcción:', isConstructionMode); // Debug log
+      console.log('🔧 Rack bloqueado:', rack.locked); // Debug log
 
       // Limpiar configuración anterior
       interactable.unset();
 
       if (isConstructionMode && !rack.locked) {
-        console.log("✅ Aplicando drag al rack:", rackId); // Debug log
-
+        console.log('✅ Aplicando drag al rack:', rackId); // Debug log
+        
         // Configuración simplificada y directa de drag
         interactable.draggable({
           inertia: false,
           autoScroll: false,
           listeners: {
             start(event) {
-              console.log(
-                "🎯 DRAG START - interact.js iniciado en rack:",
-                rackId
-              ); // Debug log
-              event.target.style.zIndex = "1000";
+              console.log('🎯 DRAG START - interact.js iniciado en rack:', rackId); // Debug log
+              event.target.style.zIndex = '1000';
             },
             move(event) {
-              console.log(
-                "🎯 DRAG MOVE - interact.js moviendo rack:",
-                rackId,
-                "dx:",
-                event.dx,
-                "dy:",
-                event.dy
-              ); // Debug log
+              console.log('🎯 DRAG MOVE - interact.js moviendo rack:', rackId, 'dx:', event.dx, 'dy:', event.dy); // Debug log
               const target = event.target;
-              const x =
-                (parseFloat(target.getAttribute("data-x")) || 0) + event.dx;
-              const y =
-                (parseFloat(target.getAttribute("data-y")) || 0) + event.dy;
+              const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+              const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
 
               target.style.transform = `translate(${x}px, ${y}px)`;
-              target.setAttribute("data-x", x);
-              target.setAttribute("data-y", y);
+              target.setAttribute('data-x', x);
+              target.setAttribute('data-y', y);
 
               registerRackModification(rackId, {
                 x: Math.round(rack.x + x / scale),
@@ -476,26 +527,15 @@ function Deposito() {
               });
             },
             end(event) {
-              console.log(
-                "🎯 DRAG END - interact.js terminado en rack:",
-                rackId
-              ); // Debug log
-              event.target.style.zIndex = "auto";
+              console.log('🎯 DRAG END - interact.js terminado en rack:', rackId); // Debug log
+              event.target.style.zIndex = 'auto';
             },
           },
         });
-
-        console.log(
-          "✅ Interact.js drag aplicado exitosamente al rack:",
-          rackId
-        ); // Debug log
+        
+        console.log('✅ Interact.js drag aplicado exitosamente al rack:', rackId); // Debug log
       } else {
-        console.log(
-          "❌ No se aplica interact.js - Modo construcción:",
-          isConstructionMode,
-          "Rack bloqueado:",
-          rack.locked
-        ); // Debug log
+        console.log('❌ No se aplica interact.js - Modo construcción:', isConstructionMode, 'Rack bloqueado:', rack.locked); // Debug log
         // Aplicar configuración básica sin drag
         interactable.draggable(false);
       }
@@ -506,57 +546,23 @@ function Deposito() {
   // Aplicar interact.js a un rack por id
   const applyInteract = useCallback(
     (id: string) => {
+      console.log('🔧 Aplicando interact.js a:', id); // Debug log
       const target = document.getElementById(id);
-      if (!target) return;
+      if (!target) {
+        console.log('❌ Elemento no encontrado:', id); // Debug log
+        return;
+      }
 
-      // Limpia cualquier configuración previa
-      interact(target).unset();
-
-      // Solo aplica si está en modo construcción y el rack no está locked
       const rackId = parseInt(id.replace("rack-", ""));
-      const rack = racks.find((r) => r.id === rackId);
-      if (!isConstructionMode || !rack || rack.locked) return;
+      console.log('🔧 Rack ID extraído:', rackId); // Debug log
+      
+      const interactable = interact(id);
+      console.log('🔧 Interactable creado para:', id); // Debug log
 
-      interact(target)
-        .draggable({
-          inertia: false,
-          listeners: {
-            move(event) {
-              let x = (parseFloat(target.style.left) || 0) + event.dx / scale;
-              let y = (parseFloat(target.style.top) || 0) + event.dy / scale;
-              target.style.left = `${x}px`;
-              target.style.top = `${y}px`;
-              // Aquí actualiza el estado si lo necesitas
-              registerRackModification(rackId, {
-                x: Math.round(x),
-                y: Math.round(y),
-                width: parseFloat(target.style.width || "100"),
-                height: parseFloat(target.style.height || "100"),
-              });
-            },
-          },
-        })
-        .resizable({
-          edges: { left: true, right: true, bottom: true, top: true },
-          listeners: {
-            move(event) {
-              let { width, height } = event.rect;
-              width = width / scale;
-              height = height / scale;
-              target.style.width = `${width}px`;
-              target.style.height = `${height}px`;
-              // Aquí actualiza el estado si lo necesitas
-              registerRackModification(rackId, {
-                width: Math.round(width),
-                height: Math.round(height),
-                x: parseFloat(target.style.left || "0"),
-                y: parseFloat(target.style.top || "0"),
-              });
-            },
-          },
-        });
+      applyInteractToElement(interactable, rackId);
+      console.log('✅ Interact.js aplicado exitosamente a:', id); // Debug log
     },
-    [isConstructionMode, racks, scale, registerRackModification]
+    [applyInteractToElement]
   );
 
   // -------------------- HANDLERS DE INTERACCIÓN DEL CANVAS --------------------
@@ -565,10 +571,10 @@ function Deposito() {
     // Prevenir el zoom del navegador
     e.preventDefault();
     e.stopPropagation();
-
+    
     // Detectar si es un gesto de zoom (trackpad o Ctrl+wheel)
     const isZoomGesture = e.ctrlKey || e.metaKey || Math.abs(e.deltaY) < 50;
-
+    
     if (isZoomGesture) {
       // Zoom
       const zoomIntensity = 0.1;
@@ -578,9 +584,9 @@ function Deposito() {
       );
     } else {
       // Pan
-      setOffset((prev) => ({
-        x: prev.x - e.deltaX,
-        y: prev.y - e.deltaY,
+      setOffset((prev) => ({ 
+        x: prev.x - e.deltaX, 
+        y: prev.y - e.deltaY 
       }));
     }
   }, []);
@@ -606,19 +612,17 @@ function Deposito() {
       // Si estamos en modo construcción, solo activar pan si el click NO es en un rack
       if (isConstructionMode) {
         const target = e.target as HTMLElement;
-        const isRackClick = target.closest(".rack-container");
-
+        const isRackClick = target.closest('.rack-container');
+        
         if (isRackClick) {
-          console.log(
-            "🎯 Click en rack en modo construcción - permitiendo interact.js manejar el drag"
-          );
+          console.log('🎯 Click en rack en modo construcción - permitiendo interact.js manejar el drag');
           return; // No activar pan, dejar que interact.js maneje el drag
         }
       }
-
+      
       // Solo activar pan si el click es en el fondo del canvas
       if (e.target === e.currentTarget) {
-        console.log("🎯 Click en fondo del canvas - activando pan");
+        console.log('🎯 Click en fondo del canvas - activando pan');
         setIsDragging(true);
         setLastMousePos({ x: e.clientX, y: e.clientY });
       }
@@ -630,18 +634,15 @@ function Deposito() {
   const handleCreateRack = async () => {
     // Generar un ID temporal único para el nuevo rack
     const tempId = Date.now();
-
+    
     // Crea los pisos según la cantidad indicada
-    const floors: ApiFloor[] = Array.from(
-      { length: newRackFloorsCount },
-      (_, i) => ({
-        id: i + 1,
-        rackId: tempId,
-        name: `Piso ${i + 1}`,
-        level: i + 1,
-        ubicaciones: [] as ProductoUbicacion[],
-      })
-    );
+    const floors: ApiFloor[] = Array.from({ length: newRackFloorsCount }, (_, i) => ({
+      id: i + 1,
+      rackId: tempId,
+      name: `Piso ${i + 1}`,
+      level: i + 1,
+      ubicaciones: [] as ProductoUbicacion[]
+    }));
 
     try {
       const newRackData: Partial<ApiRack> = {
@@ -649,111 +650,98 @@ function Deposito() {
         y: 100,
         locked: false,
         qrData: `Rack-${tempId}`,
-        floors,
+        floors
       };
 
       const newRack = await createRack(newRackData).unwrap();
-
+      
       // Convertimos el rack de la API a nuestro tipo local que incluye width y height
       const rackWithDimensions: RackData = {
         ...newRack,
         width: 100, // Valores por defecto
-        height: 100,
+        height: 100
       };
 
-      setRacks((prev) => [...prev, rackWithDimensions]);
-      setNextId((prev) => prev + 1);
+      setRacks(prev => [...prev, rackWithDimensions]);
+      setNextId(prev => prev + 1);
       setIsNewRackModalOpen(false);
-
+      
       // Aplicar interact.js al nuevo rack después de que se renderice
       setTimeout(() => {
         const rackId = `rack-${newRack.id}`;
         applyInteract(rackId);
       }, 100);
+      
     } catch (error) {
-      console.error("Error al crear el rack:", error);
+      console.error('Error al crear el rack:', error);
     }
   };
 
   // -------------------- RENDER --------------------
   useEffect(() => {
     if (racksData) {
-      console.log("Racks cargados desde la API:", racksData); // Debug log
-      const racksWithDimensions = racksData.map((rack) => ({
+      console.log('Racks cargados desde la API:', racksData); // Debug log
+      const racksWithDimensions = racksData.map(rack => ({
         ...rack,
         width: 100,
         height: 100,
-        floors: rack.floors || [], // Aseguramos que floors siempre sea un array
+        floors: rack.floors || [] // Aseguramos que floors siempre sea un array
       }));
-      console.log("Racks procesados:", racksWithDimensions); // Debug log
+      console.log('Racks procesados:', racksWithDimensions); // Debug log
       setRacks(racksWithDimensions);
     }
   }, [racksData]);
 
   // Aplicar interact.js a los racks cuando cambien
   useEffect(() => {
-    console.log(
-      "🔄 useEffect ejecutado - Racks actuales:",
-      racks.map((r) => r.id)
-    ); // Debug log
-    console.log(
-      "🔄 Racks con interact aplicado:",
-      Array.from(interactAppliedRef.current)
-    ); // Debug log
-    console.log("🔄 Modo construcción activo:", isConstructionMode); // Debug log
-    console.log(
-      "🔄 Modo construcción anterior:",
-      prevConstructionModeRef.current
-    ); // Debug log
-
+    console.log('🔄 useEffect ejecutado - Racks actuales:', racks.map(r => r.id)); // Debug log
+    console.log('🔄 Racks con interact aplicado:', Array.from(interactAppliedRef.current)); // Debug log
+    console.log('🔄 Modo construcción activo:', isConstructionMode); // Debug log
+    console.log('🔄 Modo construcción anterior:', prevConstructionModeRef.current); // Debug log
+    
     // Limpiar interact.js de todos los racks cuando cambie el modo construcción
-    if (
-      prevConstructionModeRef.current !== undefined &&
-      prevConstructionModeRef.current !== isConstructionMode
-    ) {
-      console.log(
-        "🔄 Modo construcción cambió, limpiando interact.js de todos los racks"
-      ); // Debug log
-      racks.forEach((rack) => {
+    if (prevConstructionModeRef.current !== undefined && prevConstructionModeRef.current !== isConstructionMode) {
+      console.log('🔄 Modo construcción cambió, limpiando interact.js de todos los racks'); // Debug log
+      racks.forEach(rack => {
         const rackId = `rack-${rack.id}`;
         interact(rackId).unset();
       });
       interactAppliedRef.current.clear();
     }
-
+    
     // Actualizar el ref del modo construcción anterior
     prevConstructionModeRef.current = isConstructionMode;
-
+    
     // Aplicar interact.js a todos los racks después de un pequeño delay para asegurar que el DOM esté listo
     const timeoutId = setTimeout(() => {
-      racks.forEach((rack) => {
+      racks.forEach(rack => {
         const rackId = `rack-${rack.id}`;
-        console.log("🆕 Aplicando interact.js a rack:", rack.id); // Debug log
+        console.log('🆕 Aplicando interact.js a rack:', rack.id); // Debug log
         applyInteract(rackId);
         interactAppliedRef.current.add(rack.id);
       });
     }, 50);
-
+    
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [isConstructionMode, racks, applyInteract]); // Solo dependencia del modo construcción
+  }, [isConstructionMode]); // Solo dependencia del modo construcción
 
   // Efecto separado para aplicar interact.js cuando se agregan nuevos racks
   useEffect(() => {
     if (racks.length === 0) return;
-
+    
     const timeoutId = setTimeout(() => {
-      racks.forEach((rack) => {
+      racks.forEach(rack => {
         if (!interactAppliedRef.current.has(rack.id)) {
           const rackId = `rack-${rack.id}`;
-          console.log("🆕 Aplicando interact.js a rack nuevo:", rack.id); // Debug log
+          console.log('🆕 Aplicando interact.js a rack nuevo:', rack.id); // Debug log
           applyInteract(rackId);
           interactAppliedRef.current.add(rack.id);
         }
       });
     }, 100);
-
+    
     return () => {
       clearTimeout(timeoutId);
     };
@@ -768,21 +756,21 @@ function Deposito() {
     };
 
     // Agregar event listener al documento
-    document.addEventListener("wheel", preventZoom, { passive: false });
-
+    document.addEventListener('wheel', preventZoom, { passive: false });
+    
     // Limpiar al desmontar
     return () => {
-      document.removeEventListener("wheel", preventZoom);
+      document.removeEventListener('wheel', preventZoom);
     };
   }, []);
 
   // Función de prueba para aplicar interact.js manualmente
   const testApplyInteract = useCallback(() => {
-    console.log("🧪 Test: Aplicando interact.js manualmente a todos los racks");
+    console.log('🧪 Test: Aplicando interact.js manualmente a todos los racks');
     interactAppliedRef.current.clear();
-    racks.forEach((rack) => {
+    racks.forEach(rack => {
       const rackId = `rack-${rack.id}`;
-      console.log("🧪 Test: Aplicando a rack:", rackId);
+      console.log('🧪 Test: Aplicando a rack:', rackId);
       applyInteract(rackId);
       interactAppliedRef.current.add(rack.id);
     });
@@ -790,29 +778,23 @@ function Deposito() {
 
   // Función de debug para verificar el estado de interact.js
   const debugInteractStatus = useCallback(() => {
-    console.log("🔍 === DEBUG INTERACT.JS STATUS ===");
-    console.log("🔍 Modo construcción:", isConstructionMode);
-    console.log("🔍 Racks totales:", racks.length);
-    console.log(
-      "🔍 Racks con interact aplicado:",
-      Array.from(interactAppliedRef.current)
-    );
-
-    racks.forEach((rack) => {
+    console.log('🔍 === DEBUG INTERACT.JS STATUS ===');
+    console.log('🔍 Modo construcción:', isConstructionMode);
+    console.log('🔍 Racks totales:', racks.length);
+    console.log('🔍 Racks con interact aplicado:', Array.from(interactAppliedRef.current));
+    
+    racks.forEach(rack => {
       const rackId = `rack-${rack.id}`;
       const element = document.getElementById(rackId);
       const interactable = interact(rackId);
-
+      
       console.log(`🔍 Rack ${rack.id}:`);
       console.log(`  - Elemento existe:`, !!element);
       console.log(`  - Interactable existe:`, !!interactable);
       console.log(`  - Bloqueado:`, rack.locked);
       console.log(`  - En modo construcción:`, isConstructionMode);
-      console.log(
-        `  - Debería tener drag:`,
-        isConstructionMode && !rack.locked
-      );
-
+      console.log(`  - Debería tener drag:`, isConstructionMode && !rack.locked);
+      
       if (element) {
         console.log(`  - Transform:`, element.style.transform);
         console.log(`  - Cursor:`, element.style.cursor);
@@ -820,16 +802,13 @@ function Deposito() {
         console.log(`  - Touch-action:`, element.style.touchAction);
         console.log(`  - User-select:`, element.style.userSelect);
       }
-
+      
       if (interactable) {
         console.log(`  - Interactable configurado:`, !!interactable.draggable);
-        console.log(
-          `  - Interactable listeners:`,
-          interactable.draggable().listeners
-        );
+        console.log(`  - Interactable listeners:`, interactable.draggable().listeners);
       }
     });
-    console.log("🔍 === FIN DEBUG ===");
+    console.log('🔍 === FIN DEBUG ===');
   }, [racks, isConstructionMode]);
 
   return (
@@ -837,8 +816,7 @@ function Deposito() {
       {/* Estilos CSS para los controles */}
       <style jsx>{`
         /* Prevenir zoom del navegador */
-        html,
-        body {
+        html, body {
           touch-action: none;
           -ms-touch-action: none;
           -webkit-touch-callout: none;
@@ -848,7 +826,7 @@ function Deposito() {
           -ms-user-select: none;
           user-select: none;
         }
-
+        
         /* Animación de pulso para el indicador de modo construcción */
         @keyframes pulse {
           0% {
@@ -864,21 +842,21 @@ function Deposito() {
             transform: scale(1);
           }
         }
-
+        
         .fab-container {
           position: absolute;
           top: 100px;
           right: 24px;
           z-index: 10;
         }
-
+        
         .fab-container-construction {
           position: absolute;
           top: 24px;
           right: 24px;
           z-index: 10;
         }
-
+        
         .fab-main {
           width: 56px;
           height: 56px;
@@ -894,17 +872,17 @@ function Deposito() {
           color: white;
           font-size: 24px;
         }
-
+        
         .fab-main:hover {
           transform: scale(1.1);
           box-shadow: 0 6px 25px rgba(0, 0, 0, 0.4);
         }
-
+        
         .fab-main.expanded {
           background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
           transform: rotate(45deg);
         }
-
+        
         .fab-main-construction {
           width: 56px;
           height: 56px;
@@ -920,17 +898,17 @@ function Deposito() {
           color: white;
           font-size: 24px;
         }
-
+        
         .fab-main-construction:hover {
           transform: scale(1.1);
           box-shadow: 0 6px 25px rgba(0, 0, 0, 0.4);
         }
-
+        
         .fab-main-construction.expanded {
           background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
           transform: rotate(45deg);
         }
-
+        
         .fab-tools {
           position: absolute;
           top: 0;
@@ -943,13 +921,13 @@ function Deposito() {
           transform: translateX(20px);
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-
+        
         .fab-tools.expanded {
           opacity: 1;
           visibility: visible;
           transform: translateX(-80px);
         }
-
+        
         .fab-tool {
           width: 48px;
           height: 48px;
@@ -966,13 +944,13 @@ function Deposito() {
           backdrop-filter: blur(10px);
           position: relative;
         }
-
+        
         .fab-tool:hover {
           transform: scale(1.1);
           background: rgba(255, 255, 255, 1);
           box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
         }
-
+        
         .fab-tool-label {
           position: absolute;
           right: 60px;
@@ -990,12 +968,12 @@ function Deposito() {
           pointer-events: none;
           z-index: 1000;
         }
-
+        
         .fab-tool:hover .fab-tool-label {
           opacity: 1;
           visibility: visible;
         }
-
+        
         .zoom-controls {
           display: flex;
           flex-direction: column;
@@ -1006,7 +984,7 @@ function Deposito() {
           box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
           backdrop-filter: blur(10px);
         }
-
+        
         .zoom-button {
           width: 40px;
           height: 40px;
@@ -1020,12 +998,12 @@ function Deposito() {
           transition: all 0.2s ease;
           color: #333;
         }
-
+        
         .zoom-button:hover {
           background: rgba(0, 0, 0, 0.1);
           transform: scale(1.05);
         }
-
+        
         .zoom-divider {
           width: 100%;
           height: 1px;
@@ -1064,7 +1042,7 @@ function Deposito() {
         {/* FAB - Floating Action Button con herramientas */}
         <div className="fab-container">
           {/* Herramientas desplegables */}
-          <div className={`fab-tools ${isToolsOpen ? "expanded" : ""}`}>
+          <div className={`fab-tools ${isToolsOpen ? 'expanded' : ''}`}>
             {/* Botón Reset */}
             <button
               onClick={() => setScale(1)}
@@ -1072,10 +1050,7 @@ function Deposito() {
               title="Reset Zoom"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M17.65 6.35C16.2 4.9 14.21 4 12 4C7.58 4 4 7.58 4 12C4 16.42 7.58 20 12 20C15.73 20 18.84 17.45 19.73 14H17.65C16.83 16.33 14.61 18 12 18C8.69 18 6 15.31 6 12C6 8.69 8.69 6 12 6C13.66 6 15.14 6.69 16.22 7.78L13 11H20V4L17.65 6.35Z"
-                  fill="currentColor"
-                />
+                <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4C7.58 4 4 7.58 4 12C4 16.42 7.58 20 12 20C15.73 20 18.84 17.45 19.73 14H17.65C16.83 16.33 14.61 18 12 18C8.69 18 6 15.31 6 12C6 8.69 8.69 6 12 6C13.66 6 15.14 6.69 16.22 7.78L13 11H20V4L17.65 6.35Z" fill="currentColor"/>
               </svg>
               <span className="fab-tool-label">Reset Zoom</span>
             </button>
@@ -1087,10 +1062,7 @@ function Deposito() {
               title="Centrar Vista"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M12 8C9.79 8 8 9.79 8 12C8 14.21 9.79 16 12 16C14.21 16 16 14.21 16 12C16 9.79 14.21 8 12 8ZM20 12C20 7.58 16.42 4 12 4C7.58 4 4 7.58 4 12C4 16.42 7.58 20 12 20C16.42 20 20 16.42 20 12ZM12 20C9.33 20 7 17.67 7 15H5C5 18.86 8.14 22 12 22V20ZM12 4C14.67 4 17 6.33 17 9H19C19 5.14 15.86 2 12 2V4Z"
-                  fill="currentColor"
-                />
+                <path d="M12 8C9.79 8 8 9.79 8 12C8 14.21 9.79 16 12 16C14.21 16 16 14.21 16 12C16 9.79 14.21 8 12 8ZM20 12C20 7.58 16.42 4 12 4C7.58 4 4 7.58 4 12C4 16.42 7.58 20 12 20C16.42 20 20 16.42 20 12ZM12 20C9.33 20 7 17.67 7 15H5C5 18.86 8.14 22 12 22V20ZM12 4C14.67 4 17 6.33 17 9H19C19 5.14 15.86 2 12 2V4Z" fill="currentColor"/>
               </svg>
               <span className="fab-tool-label">Centrar Vista</span>
             </button>
@@ -1103,7 +1075,7 @@ function Deposito() {
                 title="Zoom Out"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path d="M19 13H5V11H19V13Z" fill="currentColor" />
+                  <path d="M19 13H5V11H19V13Z" fill="currentColor"/>
                 </svg>
               </button>
               <div className="zoom-divider" />
@@ -1113,10 +1085,7 @@ function Deposito() {
                 title="Zoom In"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M19 13H13V19H11V13H5V11H11V5H13V11H19V13Z"
-                    fill="currentColor"
-                  />
+                  <path d="M19 13H13V19H11V13H5V11H11V5H13V11H19V13Z" fill="currentColor"/>
                 </svg>
               </button>
             </div>
@@ -1125,14 +1094,11 @@ function Deposito() {
           {/* Botón principal FAB */}
           <button
             onClick={() => setIsToolsOpen(!isToolsOpen)}
-            className={`fab-main ${isToolsOpen ? "expanded" : ""}`}
-            title={isToolsOpen ? "Cerrar Herramientas" : "Abrir Herramientas"}
+            className={`fab-main ${isToolsOpen ? 'expanded' : ''}`}
+            title={isToolsOpen ? 'Cerrar Herramientas' : 'Abrir Herramientas'}
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M19 13H13V19H11V13H5V11H11V5H13V11H19V13Z"
-                fill="currentColor"
-              />
+              <path d="M19 13H13V19H11V13H5V11H11V5H13V11H19V13Z" fill="currentColor"/>
             </svg>
           </button>
         </div>
@@ -1140,7 +1106,7 @@ function Deposito() {
         {/* FAB para modo construcción */}
         <div className="fab-container-construction">
           {/* Herramientas de construcción desplegables */}
-          <div className={`fab-tools ${isConstructionMode ? "expanded" : ""}`}>
+          <div className={`fab-tools ${isConstructionMode ? 'expanded' : ''}`}>
             {/* Botón Agregar Rack */}
             <button
               onClick={() => setIsNewRackModalOpen(true)}
@@ -1148,10 +1114,7 @@ function Deposito() {
               title="Agregar Rack"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M19 13H13V19H11V13H5V11H11V5H13V11H19V13Z"
-                  fill="currentColor"
-                />
+                <path d="M19 13H13V19H11V13H5V11H11V5H13V11H19V13Z" fill="currentColor"/>
               </svg>
               <span className="fab-tool-label">Agregar Rack</span>
             </button>
@@ -1163,21 +1126,19 @@ function Deposito() {
               title="Guardar Cambios"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
-                  fill="currentColor"
-                />
+                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="currentColor"/>
               </svg>
               <span className="fab-tool-label">Guardar Cambios</span>
             </button>
 
             {/* Botón Ayuda */}
-            <button onClick={handleOpen} className="fab-tool" title="Ayuda">
+            <button
+              onClick={handleOpen}
+              className="fab-tool"
+              title="Ayuda"
+            >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"
-                  fill="currentColor"
-                />
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" fill="currentColor"/>
               </svg>
               <span className="fab-tool-label">Ayuda</span>
             </button>
@@ -1189,10 +1150,7 @@ function Deposito() {
               title="Test Interact"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
-                  fill="currentColor"
-                />
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" fill="currentColor"/>
               </svg>
               <span className="fab-tool-label">Test Interact</span>
             </button>
@@ -1204,10 +1162,7 @@ function Deposito() {
               title="Debug Status"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"
-                  fill="currentColor"
-                />
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" fill="currentColor"/>
               </svg>
               <span className="fab-tool-label">Debug Status</span>
             </button>
@@ -1219,10 +1174,7 @@ function Deposito() {
               title="Cancelar"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
-                  fill="currentColor"
-                />
+                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor"/>
               </svg>
               <span className="fab-tool-label">Cancelar</span>
             </button>
@@ -1231,20 +1183,11 @@ function Deposito() {
           {/* Botón principal FAB de construcción */}
           <button
             onClick={() => setIsConstructionMode(!isConstructionMode)}
-            className={`fab-main-construction ${
-              isConstructionMode ? "expanded" : ""
-            }`}
-            title={
-              isConstructionMode
-                ? "Salir Modo Construcción"
-                : "Modo Construcción"
-            }
+            className={`fab-main-construction ${isConstructionMode ? 'expanded' : ''}`}
+            title={isConstructionMode ? 'Salir Modo Construcción' : 'Modo Construcción'}
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
-                fill="currentColor"
-              />
+              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor"/>
             </svg>
           </button>
         </div>
@@ -1266,7 +1209,7 @@ function Deposito() {
         linear-gradient(to bottom, rgba(255,255,255,0.18) 1px, transparent 1px)
       `,
             backgroundSize: "32px 32px",
-            pointerEvents: "auto", // En modo construcción, no capturar clicks
+            pointerEvents: isConstructionMode ? "none" : "auto", // En modo construcción, no capturar clicks
             cursor: isDragging ? "grabbing" : "grab",
           }}
           onMouseDown={handleCanvasMouseDown}
@@ -1285,14 +1228,16 @@ function Deposito() {
               onMouseEnter={() => setHoveredRackId(rack.id)}
               onMouseLeave={() => setHoveredRackId(null)}
               onClick={(e) => {
-                console.log(
-                  "🖱️ Click en rack:",
-                  rack.id,
-                  "Interact aplicado:",
-                  interactAppliedRef.current.has(rack.id)
-                );
+                console.log('🖱️ Click en rack:', rack.id, 'Interact aplicado:', interactAppliedRef.current.has(rack.id));
                 if (isConstructionMode && !rack.locked) {
                   e.stopPropagation(); // Prevenir que el canvas capture el evento
+                }
+              }}
+              onMouseDown={(e) => {
+                console.log('🖱️ MouseDown en rack:', rack.id, 'Modo construcción:', isConstructionMode, 'Bloqueado:', rack.locked);
+                if (isConstructionMode && !rack.locked) {
+                  e.stopPropagation(); // Prevenir que el canvas capture el evento
+                  console.log('🖱️ Evento detenido para permitir interact.js');
                 }
               }}
               style={{
@@ -1341,8 +1286,8 @@ function Deposito() {
 
                 opacity: isConstructionMode && !rack.locked ? 0.8 : 1,
                 // Indicador visual de que interact.js está aplicado
-                boxShadow: interactAppliedRef.current.has(rack.id)
-                  ? "0 0 10px rgba(255, 255, 0, 0.8)"
+                boxShadow: interactAppliedRef.current.has(rack.id) 
+                  ? "0 0 10px rgba(255, 255, 0, 0.8)" 
                   : "none",
               }}
             >
@@ -1396,7 +1341,7 @@ function Deposito() {
                         variant="contained"
                         color="primary"
                         size="small"
-                        onClick={() => setCurrentRackId(rack.id)}
+                        onClick={() => toggleDrawerRack(rack.id, true)}
                       >
                         <Eye size={16} />
                       </Button>
@@ -1410,51 +1355,43 @@ function Deposito() {
 
         {/* Indicador de modo construcción fijo */}
         {isConstructionMode && (
-          <div
-            style={{
-              position: "absolute",
-              top: "20px",
-              left: "20px",
-              zIndex: 10,
-              background: "rgba(76, 175, 79, 0.54)",
-              color: "white",
-              padding: "12px 20px",
-              borderRadius: "12px",
-              fontSize: "14px",
-              fontWeight: "600",
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-              backdropFilter: "blur(10px)",
-              border: "1px solid rgba(255, 255, 255, 0.2)",
-              minWidth: "280px",
-              transition: "all 0.3s ease",
-            }}
-          >
-            <div
-              style={{
-                width: "8px",
-                height: "8px",
-                borderRadius: "50%",
-                backgroundColor: "#fff",
-                animation: "pulse 2s infinite",
-              }}
-            />
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "2px" }}
-            >
+          <div style={{
+            position: "absolute",
+            top: "20px",
+            left: "20px",
+            zIndex: 10,
+            background: "rgba(76, 175, 79, 0.54)",
+            color: "white",
+            padding: "12px 20px",
+            borderRadius: "12px",
+            fontSize: "14px",
+            fontWeight: "600",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+            backdropFilter: "blur(10px)",
+            border: "1px solid rgba(255, 255, 255, 0.2)",
+            minWidth: "280px",
+            transition: "all 0.3s ease"
+          }}>
+            <div style={{
+              width: "8px",
+              height: "8px",
+              borderRadius: "50%",
+              backgroundColor: "#fff",
+              animation: "pulse 2s infinite"
+            }} />
+            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
               <div style={{ fontSize: "16px", fontWeight: "700" }}>
                 Modo Construcción Activo
               </div>
-              <div
-                style={{
-                  fontSize: "12px",
-                  opacity: 0.9,
-                  display: "flex",
-                  gap: "15px",
-                }}
-              >
+              <div style={{ 
+                fontSize: "12px", 
+                opacity: 0.9,
+                display: "flex",
+                gap: "15px"
+              }}>
                 <span>📦 Moviendo/Redimensionando: {modifiedRacks.length}</span>
                 <span>🗑️ Eliminados: {deletedRackIds.length}</span>
               </div>
@@ -1465,23 +1402,70 @@ function Deposito() {
 
       {/* Drawer para ver detalles del rack */}
       <Drawer
-        anchor="right"
-        open={Boolean(currentRackId)}
-        onClose={() => setCurrentRackId(null)}
-        PaperProps={{
-          sx: {
-            width: { xs: "100%", sm: "450px" },
-            backgroundColor: "rgba(176, 176, 176, 0.38)",
-            backdropFilter: "blur(10px)",
-          },
-        }}
-      >
-        {currentRackId && racks.find((r) => r.id === currentRackId) && (
-          <RackDrawerContent
-            rack={racks.find((r) => r.id === currentRackId)!}
-          />
-        )}
-      </Drawer>
+  anchor="right"
+  open={Boolean(currentRackId && drawerOpen[currentRackId])}
+  onClose={() => currentRackId && toggleDrawerRack(currentRackId, false)}
+  PaperProps={{
+    sx: {
+      width: { xs: "100%", sm: "450px" },
+      backgroundColor: "rgba(255, 255, 255, 0.2)",
+      backdropFilter: "blur(16px)",
+      borderLeft: "1px solid rgba(255, 255, 255, 0.3)",
+      boxShadow: `
+        -5px 0 15px -5px rgba(0, 0, 0, 0.1),
+        inset 1px 0 0 rgba(255, 255, 255, 0.1),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.1)
+      `,
+      background: `
+        linear-gradient(
+          135deg,
+          rgba(255, 255, 255, 0.25) 0%,
+          rgba(255, 255, 255, 0.1) 100%
+        )
+      `,
+      transition: "all 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
+      "&:hover": {
+        backgroundColor: "rgba(255, 255, 255, 0.25)"
+      },
+      "&::before": {
+        content: '""',
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: `
+          linear-gradient(
+            to right,
+            transparent,
+            rgba(255, 255, 255, 0.05) 20%,
+            transparent
+          )
+        `,
+        pointerEvents: "none"
+      }
+    }
+  }}
+  sx={{
+    "& .MuiBackdrop-root": {
+      backgroundColor: "rgba(0, 0, 0, 0.2)",
+      backdropFilter: "blur(3px)"
+    }
+  }}
+>
+  <Box
+    sx={{
+      height: "100%",
+      display: "flex",
+      flexDirection: "column",
+      "& > *": {
+        backdropFilter: "blur(4px)"
+      }
+    }}
+  >
+    {renderDrawerContent()}
+  </Box>
+</Drawer>
 
       {/* Modal de ayuda */}
       <Modal
@@ -1587,7 +1571,7 @@ function Deposito() {
         fullWidth
       >
         <DialogTitle>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Building2 size={24} />
             Crear Nuevo Rack
           </Box>
@@ -1606,34 +1590,32 @@ function Deposito() {
               >
                 {[1, 2, 3, 4, 5].map((num) => (
                   <MenuItem key={num} value={num}>
-                    {num} {num === 1 ? "Piso" : "Pisos"}
+                    {num} {num === 1 ? 'Piso' : 'Pisos'}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
-
+            
             {/* Vista previa de los pisos */}
             <Box sx={{ mt: 3 }}>
               <Typography variant="subtitle2" gutterBottom>
                 Vista Previa de Pisos:
               </Typography>
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 1,
-                  p: 2,
-                  bgcolor: "background.paper",
-                  borderRadius: 1,
-                }}
-              >
+              <Box sx={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: 1,
+                p: 2,
+                bgcolor: 'background.paper',
+                borderRadius: 1
+              }}>
                 {Array.from({ length: newRackFloorsCount }, (_, i) => (
                   <Chip
                     key={i}
                     label={`Piso ${i + 1}`}
                     color="primary"
                     variant="outlined"
-                    sx={{ width: "fit-content" }}
+                    sx={{ width: 'fit-content' }}
                   />
                 ))}
               </Box>
@@ -1641,7 +1623,10 @@ function Deposito() {
           </Box>
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setIsNewRackModalOpen(false)} color="inherit">
+          <Button 
+            onClick={() => setIsNewRackModalOpen(false)}
+            color="inherit"
+          >
             Cancelar
           </Button>
           <Button

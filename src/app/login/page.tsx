@@ -90,9 +90,6 @@ export default function SignIn() {
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
         <div className="text-center">
           <GuardSpinner size={60} color="#3b82f6" loading={isLoading} />
-          <p className="mt-4 text-lg font-medium text-gray-700 dark:text-gray-300">
-            Iniciando sesión...
-          </p>
         </div>
       </div>
     );
@@ -132,12 +129,8 @@ export default function SignIn() {
               : "bg-white border border-gray-200"
           }`}
         >
-          <div className="flex justify-center mb-6">
-            <SitemarkIcon
-              className={`${isDarkMode ? "text-white" : "text-gray-900"}`}
-            />
-          </div>
-
+          <div className="flex justify-center mb-6"></div>
+          <SitemarkIcon />
           <h1
             className={`text-3xl font-bold text-center mb-8 ${
               isDarkMode ? "text-white" : "text-gray-900"

@@ -1,9 +1,12 @@
 "use client";
 import { Bell, Menu, Moon, Settings, Sun } from "lucide-react";
-import React from "react";
+import React, { useState, useRef } from "react";
 import Link from "next/link";
 import { useAppDispatch, useAppSelector } from "@/app/redux";
 import { setIsDarkMode, setIsSidebarCollapsed } from "@/state";
+import { useGetProductosQuery } from "@/state/api";
+
+import { useRouter } from "next/navigation";
 
 const Navbar = () => {
   const dispatch = useAppDispatch();
@@ -11,6 +14,23 @@ const Navbar = () => {
     (state) => state.global.isSidebarCollapsed
   );
   const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showDropdown, setShowDropdown] = useState(false);
+  const inputRef = useRef(null);
+  const router = useRouter();
+
+  const { data: productos = [], isLoading } = useGetProductosQuery(
+    {
+      searchTerm,
+      page: 1,
+      limit: 10,
+      categoria: "",
+      proveedor: "",
+      precioMin: 0,
+      precioMax: 0,
+    },
+    { skip: searchTerm.length < 3 }
+  );
 
   const toggleDarkMode = () => {
     dispatch(setIsDarkMode(!isDarkMode));
@@ -19,6 +39,19 @@ const Navbar = () => {
   const toggleSidebar = () => {
     dispatch(setIsSidebarCollapsed(!isSidebarCollapsed));
   };
+
+  const handleSearch = (e) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    setShowDropdown(value.length > 2);
+  };
+
+  const handleSelect = (productoId) => {
+    setShowDropdown(false);
+    setSearchTerm("");
+    router.push(`/productos/${productoId}`);
+  };
+
   return (
     <div
       className="fixed top-0 left-0 w-full z-50 flex justify-between items-center h-16 bg-white shadow-md px-4"
@@ -40,13 +73,32 @@ const Navbar = () => {
 
         <div className="relative">
           <input
+            ref={inputRef}
             type="search"
+            value={searchTerm}
+            onChange={handleSearch}
+            onFocus={() => searchTerm.length > 2 && setShowDropdown(true)}
+            onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
             placeholder="Busca tu grupo de productos o productos"
             className="pl-10 pr-4 py-2 w-50 md:w-80 border-2 border-gray-300 bg-white rounded-lg focus:outline-none focus:border-blue-500"
           />
           <div className="absolute inset-y-0 left-0 pl-3 font flex items-center pointer-events-none">
             <Bell className="text-gray-500" size={20} />
           </div>
+
+          {showDropdown && productos.length > 0 && (
+            <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-lg shadow-lg mt-1">
+              {productos.map((producto) => (
+                <div
+                  key={producto.productoId}
+                  className="px-4 py-2 cursor-pointer hover:bg-gray-100"
+                  onMouseDown={() => handleSelect(producto.productoId)}
+                >
+                  {producto.nombre}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
